@@ -33,13 +33,22 @@ def descargar_video(url, solo_audio, carpeta_destino):
     os.makedirs(carpeta_destino, exist_ok=True)
     progreso_videos[url] = 0
 
+    cookie_path = "cookies.txt"
+    if os.path.exists(cookie_path):
+        print(f"DEBUG: Archivo {cookie_path} detectado.")
+    else:
+        print(f"DEBUG: Archivo {cookie_path} NO encontrado en {os.getcwd()}.")
+
     ydl_opts_info = {
         'extract_flat': True,
         'skip_download': True,
-        'force_generic_extractor': True,
         'quiet': True,
         'no_warnings': True
     }
+    
+    if os.path.exists(cookie_path):
+        ydl_opts_info['cookiefile'] = cookie_path
+
     with YoutubeDL(ydl_opts_info) as ydl:
         info = ydl.extract_info(url, download=False)
         title = info.get('title', 'video')
@@ -73,8 +82,8 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'writethumbnail': False
     }
 
-    if os.path.exists("cookies.txt"):
-        ydl_opts_download['cookiefile'] = "cookies.txt"
+    if os.path.exists(cookie_path):
+        ydl_opts_download['cookiefile'] = cookie_path
 
     if solo_audio:
         ydl_opts_download.update({
