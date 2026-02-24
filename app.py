@@ -58,13 +58,18 @@ def descargar_video(url, solo_audio, carpeta_destino):
         print(f"DEBUG: No se encontró cookies.txt en ninguna de las rutas: {possible_cookie_paths}")
         print(f"DEBUG: Archivos en el directorio actual ({os.getcwd()}): {os.listdir('.')}")
 
+    # Detectar entorno y configurar Node.js
+    is_render = os.environ.get('RENDER') == 'true' or os.path.exists('/opt/render')
+    node_path = '/opt/render/project/nodes/node-22.22.0/bin/node' if is_render else 'node'
+    
     ydl_opts_info = {
         'extract_flat': True,
+        'skip_download': True, # Importante para velocidad
         'no_warnings': False,
         'progress_hooks': [progreso_hook],
         'writethumbnail': False,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'js_runtimes': ['/opt/render/project/nodes/node-22.22.0/bin/node', 'node'],
+        'js_runtimes': [node_path] if is_render else ['node'],
         'force_ipv4': True,
         'cachedir': False
     }
@@ -112,7 +117,7 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'no_warnings': False,
         'writethumbnail': False,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'js_runtimes': ['/opt/render/project/nodes/node-22.22.0/bin/node', 'node'],
+        'js_runtimes': [node_path] if is_render else ['node'],
         'force_ipv4': True,
         'cachedir': False
     }
@@ -130,8 +135,9 @@ def descargar_video(url, solo_audio, carpeta_destino):
             }],
         })
     else:
+        # Formato robusto: busca el mejor video+audio, y si falla, busca el mejor archivo único
         ydl_opts_download.update({
-            'format': 'bv+ba/b',
+            'format': 'bestvideo+bestaudio/best',
             'merge_output_format': 'mp4',
         })
 
