@@ -14,6 +14,14 @@ THUMBNAIL_FOLDER = 'static/thumbnails'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAIL_FOLDER, exist_ok=True)
 
+# Diagnóstico de FFmpeg
+import subprocess
+try:
+    ffmpeg_check = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
+    print(f"DEBUG: FFmpeg detectado: {ffmpeg_check.stdout.splitlines()[0]}")
+except Exception as e:
+    print(f"DEBUG: FFmpeg NO DETECTADO o error: {e}")
+
 progreso_videos = {}
 # Almacenar información extra como el link de descarga final
 info_videos = {}
@@ -96,7 +104,7 @@ def descargar_video(url, solo_audio, carpeta_destino):
         })
     else:
         ydl_opts_download.update({
-            'format': 'bestvideo+bestaudio/best',
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'merge_output_format': 'mp4',
         })
 
