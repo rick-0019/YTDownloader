@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     nodejs \
     npm \
+    && ln -s /usr/bin/nodejs /usr/bin/node \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
