@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     python3-dev \
     gcc \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
