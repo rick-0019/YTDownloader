@@ -123,8 +123,10 @@ function startPolling() {
 }
 
 function triggerAutoDownload(url, title) {
+    // Usar URL absoluta para evitar problemas de contexto
+    const absoluteUrl = window.location.origin + url;
     const a = document.createElement('a');
-    a.href = url;
+    a.href = absoluteUrl;
     a.download = title;
     document.body.appendChild(a);
     a.click();

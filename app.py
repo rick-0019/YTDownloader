@@ -187,7 +187,8 @@ def progress():
 
 @app.route('/downloads/<path:filepath>')
 def serve_file(filepath):
-    return send_from_directory(DOWNLOAD_FOLDER, filepath)
+    filename = os.path.basename(filepath)
+    return send_from_directory(DOWNLOAD_FOLDER, filepath, as_attachment=True, download_name=filename)
 
 @app.route('/delete', methods=['POST'])
 def delete_file():
