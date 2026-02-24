@@ -41,11 +41,18 @@ def descargar_video(url, solo_audio, carpeta_destino):
     os.makedirs(carpeta_destino, exist_ok=True)
     progreso_videos[url] = 0
 
-    cookie_path = "cookies.txt"
-    if os.path.exists(cookie_path):
-        print(f"DEBUG: Archivo {cookie_path} detectado.")
-    else:
-        print(f"DEBUG: Archivo {cookie_path} NO encontrado en {os.getcwd()}.")
+    # Buscar cookies en rutas locales y de Render
+    possible_cookie_paths = ["cookies.txt", "/etc/secrets/cookies.txt"]
+    cookie_path = None
+    for path in possible_cookie_paths:
+        if os.path.exists(path):
+            cookie_path = path
+            print(f"DEBUG: Archivo de cookies detectado en: {path}")
+            break
+    
+    if not cookie_path:
+        print(f"DEBUG: No se encontró cookies.txt en ninguna de las rutas: {possible_cookie_paths}")
+        print(f"DEBUG: Archivos en el directorio actual ({os.getcwd()}): {os.listdir('.')}")
 
     ydl_opts_info = {
         'extract_flat': True,
