@@ -60,11 +60,19 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'quiet': False,
         'no_warnings': False,
         'progress_hooks': [progreso_hook],
-        'writethumbnail': False
+        'writethumbnail': False,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     
     if cookie_path:
         ydl_opts_info['cookiefile'] = cookie_path
+        # Verificar contenido básico de la cookie para diagnóstico
+        try:
+            with open(cookie_path, 'r') as f:
+                first_line = f.readline()
+                print(f"DEBUG: Cookie file first line: {first_line[:50]}...")
+        except Exception as e:
+            print(f"DEBUG: Error leyendo cookie file: {e}")
 
     with YoutubeDL(ydl_opts_info) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -96,7 +104,9 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'outtmpl': f'{carpeta_destino}/{final_filename_base}.%(ext)s',
         'ignoreerrors': True,
         'progress_hooks': [lambda d: progreso_hook(d, url)],
-        'writethumbnail': False
+        'no_warnings': False,
+        'writethumbnail': False,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
 
     if cookie_path:
@@ -117,8 +127,18 @@ def descargar_video(url, solo_audio, carpeta_destino):
             'merge_output_format': 'mp4',
         })
 
-    with YoutubeDL(ydl_opts_download) as ydl:
-        ydl.download([url])
+    try:
+        with YoutubeDL(ydl_opts_download) as ydl:
+            ydl.download([url])
+    except Exception as e:
+        if "format is not available" in str(e):
+            print("ERROR DETECTADO: El formato no está disponible. Listando formatos posibles para este video:")
+            try:
+                with YoutubeDL({'cookiefile': cookie_path} if cookie_path else {}) as ydl_debug:
+                    ydl_debug.list_formats(ydl_debug.extract_info(url, download=False))
+            except:
+                pass
+        raise e
 
     file_ext = 'mp3' if solo_audio else 'mp4'
     filename_raw = os.path.join(carpeta_destino, f"{final_filename_base}.{file_ext}")
