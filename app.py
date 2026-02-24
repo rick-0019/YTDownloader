@@ -161,8 +161,26 @@ def progreso_hook(d, url):
     elif d.get('status') == 'finished':
         progreso_videos[url] = 100
 
-@app.route('/')
-def index():
+@app.route('/debug')
+def debug_env():
+    import subprocess
+    def get_v(cmd):
+        try:
+            return subprocess.run(cmd, capture_output=True, text=True).stdout.splitlines()[0]
+        except Exception as e:
+            return str(e)
+            
+    cookie_found = any(os.path.exists(p) for p in ["cookies.txt", "/etc/secrets/cookies.txt"])
+    
+    info = {
+        'ffmpeg': get_v(['ffmpeg', '-version']),
+        'node': get_v(['node', '-v']),
+        'cookies_found': cookie_found,
+        'current_dir': os.getcwd(),
+        'dir_contents': os.listdir('.'),
+        'version': '1.0.5'
+    }
+    return jsonify(info)
     miniaturas = []
     for root, dirs, files in os.walk(THUMBNAIL_FOLDER):
         for f in files:
