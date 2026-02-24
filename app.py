@@ -14,13 +14,17 @@ THUMBNAIL_FOLDER = 'static/thumbnails'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAIL_FOLDER, exist_ok=True)
 
-# Diagnóstico de FFmpeg
+# Diagnóstico de FFmpeg y Node.js
 import subprocess
-try:
-    ffmpeg_check = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True)
-    print(f"DEBUG: FFmpeg detectado: {ffmpeg_check.stdout.splitlines()[0]}")
-except Exception as e:
-    print(f"DEBUG: FFmpeg NO DETECTADO o error: {e}")
+def get_version(cmd):
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        return res.stdout.splitlines()[0] if res.stdout else "No output"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+print(f"DEBUG: FFmpeg status: {get_version(['ffmpeg', '-version'])}")
+print(f"DEBUG: Node.js status: {get_version(['node', '-v'])}")
 
 progreso_videos = {}
 # Almacenar información extra como el link de descarga final
@@ -131,13 +135,19 @@ def descargar_video(url, solo_audio, carpeta_destino):
         with YoutubeDL(ydl_opts_download) as ydl:
             ydl.download([url])
     except Exception as e:
-        if "format is not available" in str(e):
-            print("ERROR DETECTADO: El formato no está disponible. Listando formatos posibles para este video:")
+        error_detailed = f"{type(e).__name__}: {str(e)}"
+        print(f"ERROR CRITICO EN DESCARGA: {error_detailed}")
+        if "format is not available" in str(e) or "bot" in str(e).lower():
+            print("INFO: Detectado problema de formato/bot. Intentando listar formatos disponibles para depuración...")
             try:
-                with YoutubeDL({'cookiefile': cookie_path} if cookie_path else {}) as ydl_debug:
-                    ydl_debug.list_formats(ydl_debug.extract_info(url, download=False))
-            except:
-                pass
+                debug_opts = {'quiet': True, 'no_warnings': True}
+                if cookie_path: debug_opts['cookiefile'] = cookie_path
+                with YoutubeDL(debug_opts) as ydl_debug:
+                    info_dict = ydl_debug.extract_info(url, download=False)
+                    # No listamos todo, solo confirmamos si obtuvo algo
+                    print(f"DEBUG: Título extraído en error: {info_dict.get('title')}")
+            except Exception as debug_e:
+                print(f"DEBUG: Error adicional en lista de formatos: {debug_e}")
         raise e
 
     file_ext = 'mp3' if solo_audio else 'mp4'
