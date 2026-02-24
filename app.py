@@ -61,11 +61,11 @@ def descargar_video(url, solo_audio, carpeta_destino):
     ydl_opts_info = {
         'extract_flat': True,
         'skip_download': True,
-        'quiet': False,
         'no_warnings': False,
         'progress_hooks': [progreso_hook],
         'writethumbnail': False,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'js_runtimes': ['node']
     }
     
     if cookie_path:
@@ -110,7 +110,8 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'progress_hooks': [lambda d: progreso_hook(d, url)],
         'no_warnings': False,
         'writethumbnail': False,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'js_runtimes': ['node']
     }
 
     if cookie_path:
@@ -172,13 +173,16 @@ def debug_env():
             
     cookie_found = any(os.path.exists(p) for p in ["cookies.txt", "/etc/secrets/cookies.txt"])
     
+    import yt_dlp
     info = {
         'ffmpeg': get_v(['ffmpeg', '-version']),
         'node': get_v(['node', '-v']),
+        'ytdlp_version': yt_dlp.version.__version__,
         'cookies_found': cookie_found,
         'current_dir': os.getcwd(),
+        'path': os.environ.get('PATH'),
         'dir_contents': os.listdir('.'),
-        'version': '1.0.5'
+        'version': '1.0.6'
     }
     return jsonify(info)
     miniaturas = []
