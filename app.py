@@ -60,12 +60,13 @@ def descargar_video(url, solo_audio, carpeta_destino):
 
     ydl_opts_info = {
         'extract_flat': True,
-        'skip_download': True,
         'no_warnings': False,
         'progress_hooks': [progreso_hook],
         'writethumbnail': False,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'js_runtimes': ['node']
+        'js_runtimes': ['/opt/render/project/nodes/node-22.22.0/bin/node', 'node'],
+        'force_ipv4': True,
+        'cachedir': False
     }
     
     if cookie_path:
@@ -111,7 +112,9 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'no_warnings': False,
         'writethumbnail': False,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'js_runtimes': ['node']
+        'js_runtimes': ['/opt/render/project/nodes/node-22.22.0/bin/node', 'node'],
+        'force_ipv4': True,
+        'cachedir': False
     }
 
     if cookie_path:
@@ -128,7 +131,7 @@ def descargar_video(url, solo_audio, carpeta_destino):
         })
     else:
         ydl_opts_download.update({
-            'format': 'bestvideo+bestaudio/best',
+            'format': 'bv+ba/b',
             'merge_output_format': 'mp4',
         })
 
