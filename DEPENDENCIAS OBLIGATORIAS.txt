@@ -1,0 +1,66 @@
+DEPENDENCIAS OBLIGATORIAS para YTD
+
+pip install Flask
+pip install yt-dlp
+yt-dlp -U
+pip install requests
+pip install Jinja2
+pip install colorama
+
+
+############FFmpeg (EXTERNO, NO ES PIP)###############
+
+OBLIGATORIO porque tu app convierte audio/video con yt-dlp.
+
+No se instala con pip.
+
+Si usás Windows:
+
+Bajá esta versión (recomendada):
+https://www.gyan.dev/ffmpeg/builds/
+
+Bajá "ffmpeg-git-full"
+
+Descomprimí en C:\ffmpeg
+
+Agregá al PATH:
+
+C:\ffmpeg\bin
+
+
+Verificá:
+
+ffmpeg -version
+
+#########Agregar al PATH##########
+Método fácil (Recomendado)
+
+Abrí el menú Inicio
+
+Escribí:
+
+Editar las variables de entorno del sistema
+
+
+Abrí la ventana → Propiedades del sistema
+
+Clic en el botón:
+"Variables de entorno..."
+
+En la parte de abajo, buscá:
+"Path" (en Variables del sistema, no en las de usuario)
+
+Seleccionalo y clic en Editar
+
+Clic en Nuevo
+
+Pegá:
+
+C:\ffmpeg\bin
+
+
+Aceptá todas las ventanas (Aceptar, Aceptar, Aceptar)
+
+
+
+

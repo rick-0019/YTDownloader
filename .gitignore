@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Project specific
+downloads/
+static/thumbnails/
+*.txt
+!requirements.txt
+!DEPENDENCIAS OBLIGATORIAS.txt
+!Readme.txt
+
+# OS
+.DS_Store
+Thumbs.db

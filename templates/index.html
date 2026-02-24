@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Descargador Desktop Web</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+<div class="max-w-5xl mx-auto p-6">
+    <h1 class="text-4xl font-bold mb-6 text-center">Descargador Desktop Web</h1>
+
+    <form id="download-form" class="space-y-4">
+        <textarea name="urls" rows="5" placeholder="Ingresa URLs (una por línea)" class="w-full p-3 rounded bg-gray-800 text-white"></textarea>
+        <input type="text" name="subcarpeta" placeholder="Nombre de subcarpeta (opcional)" class="w-full p-2 rounded bg-gray-800 text-white">
+        <div class="flex items-center gap-2">
+            <input type="checkbox" name="solo_audio" id="solo_audio" class="accent-blue-500">
+            <label for="solo_audio">Solo Audio (MP3)</label>
+        </div>
+        <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded w-full text-white font-semibold">Descargar</button>
+    </form>
+
+    <div id="status" class="mt-4 text-center text-blue-400"></div>
+    <div id="progress-bars" class="mt-4 space-y-2"></div>
+
+    <h2 class="text-2xl font-bold mt-6 mb-2">Videos (MP4)</h2>
+    <div id="results-videos" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2">
+        {% for item in miniaturas %}
+        {% if item.download_url and item.download_url.endswith('.mp4') %}
+            {{ render_item(item) | safe }}
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <h2 class="text-2xl font-bold mt-6 mb-2">Audios (MP3)</h2>
+    <div id="results-audios" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-2">
+        {% for item in miniaturas %}
+        {% if item.download_url and item.download_url.endswith('.mp3') %}
+            {{ render_item(item) | safe }}
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', (event) => {
+    // Escuchar el evento de formulario solo después de que el DOM esté cargado
+    document.getElementById('download-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+
+        document.getElementById('status').innerText = 'Descargando...';
+        document.getElementById('progress-bars').innerHTML = '';
+
+        try {
+            const response = await fetch('/download', { method: 'POST', body: formData });
+            const data = await response.json();
+
+            if (data.error) {
+                document.getElementById('status').innerText = data.error;
+                return;
+            }
+
+            data.forEach(item => {
+                if (item.thumbnail) {
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = `<div class="bg-gray-800 p-2 rounded shadow relative group cursor-pointer" onclick="playMedia('${item.download_url}')">
+                                            <img src="${item.thumbnail}" class="w-full rounded">
+                                            <button class="absolute top-0 right-0 m-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    onclick="event.stopPropagation(); deleteFile(this, '${item.download_url}');">
+                                                ✖️
+                                            </button>
+                                        </div>`;
+                    const div = tempDiv.firstChild;
+
+                    const isVideo = item.download_url.endsWith('.mp4');
+                    const isAudio = item.download_url.endsWith('.mp3');
+
+                    if (isVideo) {
+                        document.getElementById('results-videos').appendChild(div);
+                    } else if (isAudio) {
+                        document.getElementById('results-audios').appendChild(div);
+                    }
+                }
+            });
+
+        } catch(err){
+            document.getElementById('status').innerText = 'Error en la solicitud';
+            console.error(err);
+        }
+    });
+});
+
+function playMedia(filePath) {
+    const modal = document.getElementById('mediaModal');
+    const video = document.getElementById('modalVideo');
+    const audio = document.getElementById('modalAudio');
+
+    video.pause();
+    audio.pause();
+    video.style.display = 'none';
+    audio.style.display = 'none';
+
+    const isVideo = filePath.endsWith('.mp4');
+    const isAudio = filePath.endsWith('.mp3');
+
+    if (isVideo) {
+        video.src = filePath;
+        video.style.display = 'block';
+        video.play().catch(e => console.error("Error al intentar reproducir el video:", e));
+    } else if (isAudio) {
+        audio.src = filePath;
+        audio.style.display = 'block';
+        audio.play().catch(e => console.error("Error al intentar reproducir el audio:", e));
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+function closeModal() {
+    const modal = document.getElementById("mediaModal");
+    const video = document.getElementById("modalVideo");
+    const audio = document.getElementById("modalAudio");
+    video.pause();
+    audio.pause();
+    video.src = "";
+    audio.src = "";
+    modal.classList.add("hidden");
+}
+
+async function deleteFile(button, downloadUrl) {
+    if (!confirm('¿Estás seguro de que quieres eliminar este archivo?')) {
+        return;
+    }
+
+    const itemDiv = button.closest('div');
+    
+    try {
+        const response = await fetch('/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ download_url: downloadUrl })
+        });
+
+        if (response.ok) {
+            itemDiv.remove();
+        } else {
+            const errorData = await response.json();
+            alert('Error al eliminar el archivo: ' + errorData.error);
+        }
+
+    } catch (error) {
+        alert('Error de conexión con el servidor.');
+        console.error('Error:', error);
+    }
+}
+</script>
+
+<div id="mediaModal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+    <div class="bg-gray-900 p-4 rounded-lg relative w-3/4 h-3/4 flex flex-col items-center">
+        <button onclick="closeModal()" class="absolute top-2 right-2 text-white text-xl">✖</button>
+        <video id="modalVideo" controls class="w-full h-full rounded-lg shadow-lg" style="display: none;"></video>
+        <audio id="modalAudio" controls class="w-full rounded-lg shadow-lg mt-4" style="display: none;"></audio>
+    </div>
+</div>
+
+</body>
+</html>
+
+
+
+
+
+
