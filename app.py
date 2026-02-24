@@ -188,6 +188,9 @@ def debug_env():
         'version': '1.0.6'
     }
     return jsonify(info)
+
+@app.route('/')
+def index():
     miniaturas = []
     for root, dirs, files in os.walk(THUMBNAIL_FOLDER):
         for f in files:
