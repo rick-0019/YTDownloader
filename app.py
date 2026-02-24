@@ -61,7 +61,7 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'no_warnings': True
     }
     
-    if os.path.exists(cookie_path):
+    if cookie_path:
         ydl_opts_info['cookiefile'] = cookie_path
 
     with YoutubeDL(ydl_opts_info) as ydl:
@@ -97,7 +97,7 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'writethumbnail': False
     }
 
-    if os.path.exists(cookie_path):
+    if cookie_path:
         ydl_opts_download['cookiefile'] = cookie_path
 
     if solo_audio:
