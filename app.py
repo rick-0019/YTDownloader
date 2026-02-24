@@ -59,7 +59,6 @@ def descargar_video(url, solo_audio, carpeta_destino):
         'skip_download': True,
         'quiet': False,
         'no_warnings': False,
-        'noplaylist': True,
         'progress_hooks': [progreso_hook],
         'writethumbnail': False
     }
@@ -114,7 +113,8 @@ def descargar_video(url, solo_audio, carpeta_destino):
         })
     else:
         ydl_opts_download.update({
-            'format': 'best[ext=mp4]/best',
+            'format': 'bestvideo+bestaudio/best',
+            'merge_output_format': 'mp4',
         })
 
     with YoutubeDL(ydl_opts_download) as ydl:
