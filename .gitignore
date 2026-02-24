@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 venv/
 .env
+cookies.txt
 
 # Project specific
 downloads/
