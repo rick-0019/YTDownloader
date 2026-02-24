@@ -104,7 +104,7 @@ def descargar_video(url, solo_audio, carpeta_destino):
         })
     else:
         ydl_opts_download.update({
-            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'format': 'bestvideo+bestaudio/best',
             'merge_output_format': 'mp4',
         })
 
