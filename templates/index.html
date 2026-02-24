@@ -48,8 +48,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     document.getElementById('download-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
-
-        document.getElementById('status').innerText = 'Descargando...';
+        
+        document.getElementById('status').innerText = 'Iniciando descarga...';
         document.getElementById('progress-bars').innerHTML = '';
 
         try {
@@ -61,28 +61,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
                 return;
             }
 
-            data.forEach(item => {
-                if (item.thumbnail) {
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = `<div class="bg-gray-800 p-2 rounded shadow relative group cursor-pointer" onclick="playMedia('${item.download_url}')">
-                                            <img src="${item.thumbnail}" class="w-full rounded">
-                                            <button class="absolute top-0 right-0 m-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    onclick="event.stopPropagation(); deleteFile(this, '${item.download_url}');">
-                                                ✖️
-                                            </button>
-                                        </div>`;
-                    const div = tempDiv.firstChild;
-
-                    const isVideo = item.download_url.endsWith('.mp4');
-                    const isAudio = item.download_url.endsWith('.mp3');
-
-                    if (isVideo) {
-                        document.getElementById('results-videos').appendChild(div);
-                    } else if (isAudio) {
-                        document.getElementById('results-audios').appendChild(div);
-                    }
-                }
-            });
+            // Iniciar polleo de progreso
+            startPolling();
 
         } catch(err){
             document.getElementById('status').innerText = 'Error en la solicitud';
@@ -90,6 +70,71 @@ document.addEventListener('DOMContentLoaded', (event) => {
         }
     });
 });
+
+let pollingInterval;
+let downloadedUrls = new Set();
+
+function startPolling() {
+    if (pollingInterval) clearInterval(pollingInterval);
+    pollingInterval = setInterval(async () => {
+        try {
+            const res = await fetch('/progress');
+            const progressData = await res.json();
+            
+            const progressBarsContainer = document.getElementById('progress-bars');
+            
+            // Actualizar o crear barras de progreso
+            for (const [url, data] of Object.entries(progressData)) {
+                const progress = data.progress;
+                const downloadUrl = data.download_url;
+                
+                let barContainer = document.getElementById(`progress-${btoa(url).substring(0, 10)}`);
+                if (!barContainer) {
+                    barContainer = document.createElement('div');
+                    barContainer.id = `progress-${btoa(url).substring(0, 10)}`;
+                    barContainer.className = "w-full bg-gray-700 rounded h-4 mb-2 overflow-hidden relative";
+                    barContainer.innerHTML = `<div class="bg-blue-500 h-full transition-all duration-300" style="width: 0%"></div>
+                                              <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">0%</span>`;
+                    progressBarsContainer.appendChild(barContainer);
+                }
+                
+                const fill = barContainer.querySelector('div');
+                const text = barContainer.querySelector('span');
+                fill.style.width = `${progress}%`;
+                text.innerText = `${progress}%`;
+
+                // Si terminó y no lo hemos descargado automáticamente aún
+                if (progress === 100 && downloadUrl && !downloadedUrls.has(url)) {
+                    downloadedUrls.add(url);
+                    triggerAutoDownload(downloadUrl, data.title || 'video');
+                }
+            }
+
+            // Si no hay nada descargándose (todos al 100%), detenemos polleo después de un momento
+            if (Object.values(progressData).length > 0 && Object.values(progressData).every(d => d.progress === 100)) {
+                document.getElementById('status').innerText = 'Descargas finalizadas automáticamente';
+                // clearInterval(pollingInterval); // Opcional
+            }
+
+        } catch (e) {
+            console.error("Error en polleo:", e);
+        }
+    }, 1000);
+}
+
+function triggerAutoDownload(url, title) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = title;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    // Recargar la galería después de un momento para mostrar la miniatura
+    setTimeout(() => {
+        location.reload();
+    }, 2000);
+}
 
 function playMedia(filePath) {
     const modal = document.getElementById('mediaModal');

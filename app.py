@@ -15,6 +15,8 @@ os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAIL_FOLDER, exist_ok=True)
 
 progreso_videos = {}
+# Almacenar información extra como el link de descarga final
+info_videos = {}
 
 # Configuración del entorno Jinja2 para usar funciones personalizadas
 app.jinja_env.globals['render_item'] = lambda item: f"""
@@ -164,15 +166,24 @@ def download():
                 print(f"Error downloading {url}: {e}")
             finally:
                 progreso_videos[url] = 100
+                info_videos[url] = {'download_url': download_url, 'title': title}
 
     thread = threading.Thread(target=thread_func)
     thread.start()
-    thread.join()
-    return jsonify(results)
+    # No esperaremos al thread (quitamos thread.join()) para que la web responda al instante
+    return jsonify({'status': 'started', 'message': 'Descarga iniciada'})
 
 @app.route('/progress')
 def progress():
-    return jsonify(progreso_videos)
+    # Combinar progreso con info extra si existe
+    data = {}
+    for url, prog in progreso_videos.items():
+        data[url] = {
+            'progress': prog,
+            'download_url': info_videos.get(url, {}).get('download_url'),
+            'title': info_videos.get(url, {}).get('title')
+        }
+    return jsonify(data)
 
 @app.route('/downloads/<path:filepath>')
 def serve_file(filepath):
@@ -216,7 +227,8 @@ def delete_file():
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
 
 
 
