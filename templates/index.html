@@ -106,14 +106,21 @@ function startPolling() {
                 // Si terminó y no lo hemos descargado automáticamente aún
                 if (progress === 100 && downloadUrl && !downloadedUrls.has(url)) {
                     downloadedUrls.add(url);
+                    
+                    // Mostrar mensaje y botón de descarga manual por si el auto falla
+                    document.getElementById('status').innerHTML = `
+                        <div class="bg-green-600 text-white p-3 rounded mt-4">
+                            ¡Archivo listo! Si la descarga no inició sola: 
+                            <a href="${window.location.origin}${downloadUrl}" download="${data.title}" class="font-bold underline ml-2">Haz clic aquí para descargar</a>
+                        </div>`;
+                    
                     triggerAutoDownload(downloadUrl, data.title || 'video');
                 }
             }
 
             // Si no hay nada descargándose (todos al 100%), detenemos polleo después de un momento
             if (Object.values(progressData).length > 0 && Object.values(progressData).every(d => d.progress === 100)) {
-                document.getElementById('status').innerText = 'Descargas finalizadas automáticamente';
-                // clearInterval(pollingInterval); // Opcional
+                // El estado ya se actualizó con el botón verde arriba
             }
 
         } catch (e) {
