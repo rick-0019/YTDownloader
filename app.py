@@ -149,24 +149,42 @@ def download():
 
     def thread_func():
         for url in urls:
+            current_download_url = None
+            current_title = "video"
             try:
                 title, thumbnail, full_file_path = descargar_video(url, solo_audio, carpeta_destino)
+                current_title = title
                 
-                relative_path = os.path.relpath(full_file_path, DOWNLOAD_FOLDER)
-                download_url = f"/downloads/{relative_path.replace(os.path.sep, '/')}"
+                if not os.path.exists(full_file_path):
+                    print(f"ERROR: El archivo no se creó en {full_file_path}")
+                    # Tal vez yt-dlp dejó otra extensión si falló ffmpeg
+                    base = os.path.splitext(full_file_path)[0]
+                    found = False
+                    for f in os.listdir(os.path.dirname(full_file_path)):
+                        if f.startswith(os.path.basename(base)):
+                            print(f"INFO: Se encontró archivo alternativo: {f}")
+                            full_file_path = os.path.join(os.path.dirname(full_file_path), f)
+                            found = True
+                            break
+                    if not found:
+                        raise Exception("Archivo no encontrado después de la descarga.")
 
+                relative_path = os.path.relpath(full_file_path, DOWNLOAD_FOLDER)
+                current_download_url = f"/downloads/{relative_path.replace(os.path.sep, '/')}"
+
+                print(f"Descarga exitosa: {current_download_url}")
                 results.append({
                     'url': url,
                     'title': title,
                     'thumbnail': thumbnail,
-                    'download_url': download_url
+                    'download_url': current_download_url
                 })
             except Exception as e:
                 results.append({'url': url, 'error': str(e)})
-                print(f"Error downloading {url}: {e}")
+                print(f"Error descargando {url}: {e}")
             finally:
                 progreso_videos[url] = 100
-                info_videos[url] = {'download_url': download_url, 'title': title}
+                info_videos[url] = {'download_url': current_download_url, 'title': current_title}
 
     thread = threading.Thread(target=thread_func)
     thread.start()
@@ -187,6 +205,11 @@ def progress():
 
 @app.route('/downloads/<path:filepath>')
 def serve_file(filepath):
+    full_path = os.path.join(DOWNLOAD_FOLDER, filepath)
+    if not os.path.exists(full_path):
+        print(f"ERROR: Se intentó descargar un archivo que no existe: {full_path}")
+        return jsonify({'error': 'El archivo no existe en el servidor. Puede que haya sido borrado.'}), 404
+        
     filename = os.path.basename(filepath)
     return send_from_directory(DOWNLOAD_FOLDER, filepath, as_attachment=True, download_name=filename)
 
