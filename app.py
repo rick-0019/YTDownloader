@@ -151,6 +151,7 @@ def download():
         for url in urls:
             current_download_url = None
             current_title = "video"
+            info_videos[url] = {'status': 'processing'}
             try:
                 title, thumbnail, full_file_path = descargar_video(url, solo_audio, carpeta_destino)
                 current_title = title
@@ -180,11 +181,14 @@ def download():
                     'download_url': current_download_url
                 })
             except Exception as e:
-                results.append({'url': url, 'error': str(e)})
-                print(f"Error descargando {url}: {e}")
+                error_msg = str(e)
+                results.append({'url': url, 'error': error_msg})
+                print(f"Error descargando {url}: {error_msg}")
+                info_videos[url] = {'error': error_msg, 'status': 'error'}
             finally:
-                progreso_videos[url] = 100
-                info_videos[url] = {'download_url': current_download_url, 'title': current_title}
+                if current_download_url:
+                    progreso_videos[url] = 100
+                    info_videos[url] = {'download_url': current_download_url, 'title': current_title, 'status': 'finished'}
 
     thread = threading.Thread(target=thread_func)
     thread.start()
@@ -196,10 +200,13 @@ def progress():
     # Combinar progreso con info extra si existe
     data = {}
     for url, prog in progreso_videos.items():
+        info = info_videos.get(url, {})
         data[url] = {
             'progress': prog,
-            'download_url': info_videos.get(url, {}).get('download_url'),
-            'title': info_videos.get(url, {}).get('title')
+            'download_url': info.get('download_url'),
+            'title': info.get('title'),
+            'error': info.get('error'),
+            'status': info.get('status', 'downloading')
         }
     return jsonify(data)
 

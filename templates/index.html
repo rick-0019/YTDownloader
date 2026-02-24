@@ -87,40 +87,58 @@ function startPolling() {
             for (const [url, data] of Object.entries(progressData)) {
                 const progress = data.progress;
                 const downloadUrl = data.download_url;
+                const status = data.status;
                 
-                let barContainer = document.getElementById(`progress-${btoa(url).substring(0, 10)}`);
+                // Limpiar caracteres no válidos para el ID
+                const safeId = btoa(url).replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
+                let barContainer = document.getElementById(`progress-${safeId}`);
                 if (!barContainer) {
                     barContainer = document.createElement('div');
-                    barContainer.id = `progress-${btoa(url).substring(0, 10)}`;
-                    barContainer.className = "w-full bg-gray-700 rounded h-4 mb-2 overflow-hidden relative";
+                    barContainer.id = `progress-${safeId}`;
+                    barContainer.className = "w-full bg-gray-700 rounded h-6 mb-2 overflow-hidden relative border border-gray-600";
                     barContainer.innerHTML = `<div class="bg-blue-500 h-full transition-all duration-300" style="width: 0%"></div>
-                                              <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">0%</span>`;
+                                              <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white uppercase tracking-wider">0%</span>`;
                     progressBarsContainer.appendChild(barContainer);
                 }
                 
                 const fill = barContainer.querySelector('div');
                 const text = barContainer.querySelector('span');
-                fill.style.width = `${progress}%`;
-                text.innerText = `${progress}%`;
+                
+                if (data.error) {
+                    fill.className = "bg-red-700 h-full";
+                    fill.style.width = "100%";
+                    text.innerText = `ERROR: ${data.error}`;
+                    continue;
+                }
 
-                // Si terminó y no lo hemos descargado automáticamente aún
-                if (progress === 100 && downloadUrl && !downloadedUrls.has(url)) {
-                    downloadedUrls.add(url);
+                fill.style.width = `${progress}%`;
+                
+                if (progress === 100 && status === 'processing') {
+                    fill.className = "bg-yellow-600 h-full animate-pulse";
+                    text.innerText = "PROCESANDO / UNIFICANDO ARCHIVOS...";
+                } else if (progress === 100 && status === 'finished') {
+                    fill.className = "bg-green-600 h-full";
+                    text.innerText = "¡COMPLETO!";
                     
-                    // Mostrar mensaje y botón de descarga manual por si el auto falla
-                    document.getElementById('status').innerHTML = `
-                        <div class="bg-green-600 text-white p-3 rounded mt-4">
-                            ¡Archivo listo! Si la descarga no inició sola: 
-                            <a href="${window.location.origin}${downloadUrl}" download="${data.title}" class="font-bold underline ml-2">Haz clic aquí para descargar</a>
-                        </div>`;
-                    
-                    triggerAutoDownload(downloadUrl, data.title || 'video');
+                    if (downloadUrl && !downloadedUrls.has(url)) {
+                        downloadedUrls.add(url);
+                        
+                        document.getElementById('status').innerHTML = `
+                            <div class="bg-green-600 text-white p-3 rounded mt-4 shadow-lg border-2 border-green-400">
+                                <p class="font-bold">¡Archivo listo!</p>
+                                <p class="text-sm">Si la descarga no inició sola: 
+                                <a href="${window.location.origin}${downloadUrl}" download="${data.title}" class="font-extrabold underline ml-1 hover:text-green-100">Haz clic aquí</a></p>
+                            </div>`;
+                        
+                        triggerAutoDownload(downloadUrl, data.title || 'video');
+                    }
+                } else {
+                    text.innerText = `DESCARGANDO: ${progress}%`;
                 }
             }
 
-            // Si no hay nada descargándose (todos al 100%), detenemos polleo después de un momento
-            if (Object.values(progressData).length > 0 && Object.values(progressData).every(d => d.progress === 100)) {
-                // El estado ya se actualizó con el botón verde arriba
+            if (Object.values(progressData).length > 0 && Object.values(progressData).every(d => d.status === 'finished' || d.status === 'error')) {
+                // Tareas finalizadas
             }
 
         } catch (e) {
