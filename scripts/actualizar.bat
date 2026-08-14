@@ -7,8 +7,8 @@ echo ===========================================
 REM Cambia al directorio del script para evitar problemas de ruta
 cd /d "%~dp0"
 
-REM Ejecuta la actualizacion usando pip dentro del entorno virtual
-venv\Scripts\python.exe -m pip install --upgrade yt-dlp
+REM Ejecuta la actualizacion usando el python del entorno virtual (venv)
+..\venv\Scripts\python -m pip install --upgrade yt-dlp
 
 echo.
 echo ===========================================

@@ -1,17 +1,7 @@
-activar el entorno virtual
+YT-Downloader
 
 venv\Scripts\activate
-
-activar el servidor
-
-ejecuta
-
 python app.py
 
+Si da error ejecute activar.bat
 
-requerimientos.
-
-pip install -r requirements.txt
-
-ejecutar actualizar.bat (ytvideo)
-si falla la descarga del video

@@ -4,7 +4,9 @@ import os
 import threading
 import requests
 import re
+import time
 from jinja2 import Environment, FileSystemLoader
+from urllib.parse import unquote
 
 app = Flask(__name__)
 
@@ -14,17 +16,6 @@ THUMBNAIL_FOLDER = 'static/thumbnails'
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 os.makedirs(THUMBNAIL_FOLDER, exist_ok=True)
 
-# Diagnóstico de FFmpeg y Node.js
-import subprocess
-def get_version(cmd):
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        return res.stdout.splitlines()[0] if res.stdout else "No output"
-    except Exception as e:
-        return f"ERROR: {e}"
-
-print(f"DEBUG: FFmpeg status: {get_version(['ffmpeg', '-version'])}")
-print(f"DEBUG: Node.js status: {get_version(['node', '-v'])}")
 
 progreso_videos = {}
 # Almacenar información extra como el link de descarga final
@@ -45,81 +36,31 @@ def descargar_video(url, solo_audio, carpeta_destino):
     os.makedirs(carpeta_destino, exist_ok=True)
     progreso_videos[url] = 0
 
-    # Buscar cookies en rutas locales y de Render
-    possible_cookie_paths = ["cookies.txt", "/etc/secrets/cookies.txt"]
-    cookie_path = None
-    for path in possible_cookie_paths:
-        if os.path.exists(path):
-            cookie_path = path
-            print(f"DEBUG: Archivo de cookies detectado en: {path}")
-            break
-    
-    if not cookie_path:
-        print(f"DEBUG: No se encontró cookies.txt en ninguna de las rutas: {possible_cookie_paths}")
-        print(f"DEBUG: Archivos en el directorio actual ({os.getcwd()}): {os.listdir('.')}")
-
-    # Detectar entorno y configurar Node.js
-    is_render = os.environ.get('RENDER') == 'true' or os.path.exists('/opt/render')
-    node_path = '/opt/render/project/nodes/node-22.22.0/bin/node' if is_render else 'node'
+    # Buscar cookies locales
+    cookie_path = "cookies.txt" if os.path.exists("cookies.txt") else None
     
     ydl_opts_info = {
         'extract_flat': True,
-        'skip_download': True, # Importante para velocidad
-        'no_warnings': False,
-        'progress_hooks': [progreso_hook],
-        'writethumbnail': False,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'js_runtimes': [node_path] if is_render else ['node'],
-        'force_ipv4': True,
-        'cachedir': False
+        'skip_download': True,
+        'no_warnings': True,
+        'quiet': True,
+        'js_runtimes': {'node': {}},
     }
     
     if cookie_path:
         ydl_opts_info['cookiefile'] = cookie_path
-        # Verificar contenido básico de la cookie para diagnóstico
-        try:
-            with open(cookie_path, 'r') as f:
-                first_line = f.readline()
-                print(f"DEBUG: Cookie file first line: {first_line[:50]}...")
-        except Exception as e:
-            print(f"DEBUG: Error leyendo cookie file: {e}")
 
     with YoutubeDL(ydl_opts_info) as ydl:
         info = ydl.extract_info(url, download=False)
         title = info.get('title', 'video')
-
-    safe_filename = "".join(c for c in title if c.isalnum() or c in " -_").strip()
-    
-    if solo_audio:
-        final_filename_base = f"{safe_filename}_mp3"
-    else:
-        final_filename_base = safe_filename
-    
-    thumb_url = info.get('thumbnail')
-    thumb_file_path = None
-    if thumb_url:
-        try:
-            ext = os.path.splitext(thumb_url.split("?")[0])[1] or ".jpg"
-            thumb_dest = os.path.join(THUMBNAIL_FOLDER, f"{final_filename_base}{ext}")
-
-            r = requests.get(thumb_url, timeout=10)
-            with open(thumb_dest, "wb") as f:
-                f.write(r.content)
-            
-            thumb_file_path = f"/static/thumbnails/{final_filename_base}{ext}"
-        except Exception as e:
-            print("Error al guardar miniatura:", e)
+        is_playlist = 'entries' in info or 'list=' in url.lower() or info.get('_type') == 'playlist'
 
     ydl_opts_download = {
-        'outtmpl': f'{carpeta_destino}/{final_filename_base}.%(ext)s',
         'ignoreerrors': True,
         'progress_hooks': [lambda d: progreso_hook(d, url)],
-        'no_warnings': False,
-        'writethumbnail': False,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'js_runtimes': [node_path] if is_render else ['node'],
-        'force_ipv4': True,
-        'cachedir': False
+        'no_warnings': True,
+        'writethumbnail': True,
+        'js_runtimes': {'node': {}},
     }
 
     if cookie_path:
@@ -135,35 +76,39 @@ def descargar_video(url, solo_audio, carpeta_destino):
             }],
         })
     else:
-        # Formato robusto: busca el mejor video+audio, y si falla, busca el mejor archivo único
         ydl_opts_download.update({
             'format': 'bestvideo+bestaudio/best',
             'merge_output_format': 'mp4',
         })
 
-    try:
-        with YoutubeDL(ydl_opts_download) as ydl:
-            ydl.download([url])
-    except Exception as e:
-        error_detailed = f"{type(e).__name__}: {str(e)}"
-        print(f"ERROR CRITICO EN DESCARGA: {error_detailed}")
-        if "format is not available" in str(e) or "bot" in str(e).lower():
-            print("INFO: Detectado problema de formato/bot. Intentando listar formatos disponibles para depuración...")
-            try:
-                debug_opts = {'quiet': True, 'no_warnings': True}
-                if cookie_path: debug_opts['cookiefile'] = cookie_path
-                with YoutubeDL(debug_opts) as ydl_debug:
-                    info_dict = ydl_debug.extract_info(url, download=False)
-                    # No listamos todo, solo confirmamos si obtuvo algo
-                    print(f"DEBUG: Título extraído en error: {info_dict.get('title')}")
-            except Exception as debug_e:
-                print(f"DEBUG: Error adicional en lista de formatos: {debug_e}")
-        raise e
+    if is_playlist:
+        # Nombre dinámico para cada item
+        ydl_opts_download['outtmpl'] = f'{carpeta_destino}/%(playlist_index)02d - %(title)s.%(ext)s'
+        
+        try:
+            with YoutubeDL(ydl_opts_download) as ydl:
+                ydl.download([url])
+        except Exception as e:
+            print(f"Error descargando playlist {url}: {e}")
+            raise e
+        
+        return title, None, None
+    else:
+        safe_filename = "".join(c for c in title if c.isalnum() or c in " -_").strip()
+        final_filename_base = f"{safe_filename}_mp3" if solo_audio else safe_filename
+        ydl_opts_download['outtmpl'] = f'{carpeta_destino}/{final_filename_base}.%(ext)s'
+        
+        try:
+            with YoutubeDL(ydl_opts_download) as ydl:
+                ydl.download([url])
+        except Exception as e:
+            print(f"Error descargando {url}: {e}")
+            raise e
 
-    file_ext = 'mp3' if solo_audio else 'mp4'
-    filename_raw = os.path.join(carpeta_destino, f"{final_filename_base}.{file_ext}")
-    
-    return title, thumb_file_path, filename_raw
+        file_ext = 'mp3' if solo_audio else 'mp4'
+        filename_raw = os.path.join(carpeta_destino, f"{final_filename_base}.{file_ext}")
+        
+        return title, None, filename_raw
 
 def progreso_hook(d, url):
     if d.get('total_bytes') and d.get('downloaded_bytes'):
@@ -171,56 +116,55 @@ def progreso_hook(d, url):
     elif d.get('status') == 'finished':
         progreso_videos[url] = 100
 
-@app.route('/debug')
-def debug_env():
-    import subprocess
-    def get_v(cmd):
-        try:
-            return subprocess.run(cmd, capture_output=True, text=True).stdout.splitlines()[0]
-        except Exception as e:
-            return str(e)
-            
-    cookie_found = any(os.path.exists(p) for p in ["cookies.txt", "/etc/secrets/cookies.txt"])
-    
-    import yt_dlp
-    info = {
-        'ffmpeg': get_v(['ffmpeg', '-version']),
-        'node': get_v(['node', '-v']),
-        'ytdlp_version': yt_dlp.version.__version__,
-        'cookies_found': cookie_found,
-        'current_dir': os.getcwd(),
-        'path': os.environ.get('PATH'),
-        'dir_contents': os.listdir('.'),
-        'version': '1.0.6'
-    }
-    return jsonify(info)
 
 @app.route('/')
 def index():
-    miniaturas = []
-    for root, dirs, files in os.walk(THUMBNAIL_FOLDER):
-        for f in files:
-            thumb_url = f"/static/thumbnails/{f}"
-            filename_base = os.path.splitext(f)[0]
-            
-            video_download_url = None
-            
-            for video_root, video_dirs, video_files in os.walk(DOWNLOAD_FOLDER):
-                for v_file in video_files:
-                    if os.path.splitext(v_file)[0] == filename_base:
-                        relative_path = os.path.relpath(os.path.join(video_root, v_file), DOWNLOAD_FOLDER)
-                        video_download_url = f"/downloads/{relative_path.replace(os.path.sep, '/')}"
-                        break
-                if video_download_url:
-                    break
-            
-            if video_download_url:
-                miniaturas.append({
-                    'thumb_url': thumb_url,
-                    'download_url': video_download_url
-                })
+    media_by_folder = {}
     
-    return render_template('index.html', miniaturas=miniaturas)
+    # Extensiones soportadas
+    extensions = ('.mp4', '.mp3', '.mkv', '.webm')
+    
+    for root, dirs, files in os.walk(DOWNLOAD_FOLDER):
+        relative_dir = os.path.relpath(root, DOWNLOAD_FOLDER).replace(os.path.sep, '/')
+        folder_name = "Principal" if relative_dir == "." else relative_dir
+        
+        folder_items = []
+        for f in files:
+            if f.lower().endswith(extensions):
+                filename_base = os.path.splitext(f)[0]
+                
+                # Buscar miniatura nativa o antigua
+                thumb_url = "/static/placeholder.jpg"
+                
+                # Buscar en carpeta descargas nativa de yt-dlp
+                for img_ext in ['.jpg', '.webp', '.png']:
+                    if os.path.exists(os.path.join(root, filename_base + img_ext)):
+                        rel = os.path.relpath(os.path.join(root, filename_base + img_ext), DOWNLOAD_FOLDER)
+                        thumb_url = f"/media/{rel.replace(os.path.sep, '/')}"
+                        break
+                
+                if thumb_url == "/static/placeholder.jpg":
+                    for t_file in os.listdir(THUMBNAIL_FOLDER):
+                        if os.path.splitext(t_file)[0] == filename_base:
+                            thumb_url = f"/static/thumbnails/{t_file}"
+                            break
+                
+                relative_path = os.path.relpath(os.path.join(root, f), DOWNLOAD_FOLDER)
+                download_url = f"/downloads/{relative_path.replace(os.path.sep, '/')}"
+                
+                folder_items.append({
+                    'name': f,
+                    'thumb_url': thumb_url,
+                    'download_url': download_url,
+                    'is_audio': f.lower().endswith('.mp3')
+                })
+        
+        if folder_items:
+            if folder_name not in media_by_folder:
+                media_by_folder[folder_name] = []
+            media_by_folder[folder_name].extend(folder_items)
+    
+    return render_template('index.html', media_by_folder=media_by_folder)
 
 @app.route('/download', methods=['POST'])
 def download():
@@ -232,7 +176,7 @@ def download():
         return jsonify({'error': 'No se ingresaron URLs'}), 400
 
     solo_audio = form.get('solo_audio', 'off') == 'on'
-    subcarpeta = form.get('subcarpeta', '').strip()
+    subcarpeta = form.get('subcarpeta', '').strip().replace('\\', '/')
     carpeta_destino = os.path.join(DOWNLOAD_FOLDER, subcarpeta) if subcarpeta else DOWNLOAD_FOLDER
 
     results = []
@@ -241,27 +185,28 @@ def download():
         for url in urls:
             current_download_url = None
             current_title = "video"
-            info_videos[url] = {'status': 'processing'}
+            info_videos[url] = {'status': 'processing', 'solo_audio': solo_audio}
             try:
                 title, thumbnail, full_file_path = descargar_video(url, solo_audio, carpeta_destino)
                 current_title = title
                 
-                if not os.path.exists(full_file_path):
-                    print(f"ERROR: El archivo no se creó en {full_file_path}")
-                    # Tal vez yt-dlp dejó otra extensión si falló ffmpeg
-                    base = os.path.splitext(full_file_path)[0]
-                    found = False
-                    for f in os.listdir(os.path.dirname(full_file_path)):
-                        if f.startswith(os.path.basename(base)):
-                            print(f"INFO: Se encontró archivo alternativo: {f}")
-                            full_file_path = os.path.join(os.path.dirname(full_file_path), f)
-                            found = True
-                            break
-                    if not found:
-                        raise Exception("Archivo no encontrado después de la descarga.")
-
-                relative_path = os.path.relpath(full_file_path, DOWNLOAD_FOLDER)
-                current_download_url = f"/downloads/{relative_path.replace(os.path.sep, '/')}"
+                if full_file_path is None:
+                    # Es una playlist
+                    current_download_url = "" 
+                else:
+                    if not os.path.exists(full_file_path):
+                        base = os.path.splitext(full_file_path)[0]
+                        found = False
+                        for f in os.listdir(os.path.dirname(full_file_path)):
+                            if f.startswith(os.path.basename(base)):
+                                full_file_path = os.path.join(os.path.dirname(full_file_path), f)
+                                found = True
+                                break
+                        if not found:
+                            raise Exception("Archivo no encontrado después de la descarga.")
+                            
+                    relative_path = os.path.relpath(full_file_path, DOWNLOAD_FOLDER)
+                    current_download_url = f"/downloads/{relative_path.replace(os.path.sep, '/')}"
 
                 print(f"Descarga exitosa: {current_download_url}")
                 results.append({
@@ -296,7 +241,8 @@ def progress():
             'download_url': info.get('download_url'),
             'title': info.get('title'),
             'error': info.get('error'),
-            'status': info.get('status', 'downloading')
+            'status': info.get('status', 'downloading'),
+            'solo_audio': info.get('solo_audio', False)
         }
     return jsonify(data)
 
@@ -310,6 +256,11 @@ def serve_file(filepath):
     filename = os.path.basename(filepath)
     return send_from_directory(DOWNLOAD_FOLDER, filepath, as_attachment=True, download_name=filename)
 
+@app.route('/media/<path:filepath>')
+def serve_media(filepath):
+    # Sirve archivos sin as_attachment para miniaturas
+    return send_from_directory(DOWNLOAD_FOLDER, filepath)
+
 @app.route('/delete', methods=['POST'])
 def delete_file():
     data = request.get_json()
@@ -319,18 +270,37 @@ def delete_file():
         return jsonify({'error': 'URL de descarga no proporcionada'}), 400
 
     try:
-        # Convertir la URL relativa en una ruta de archivo absoluta
-        filepath_relative = download_url.replace('/downloads/', '', 1)
+        # Convertir la URL relativa en una ruta de archivo absoluta (decodificando URL)
+        filepath_relative = unquote(download_url.replace('/downloads/', '', 1))
+        # Asegurar compatibilidad de separadores en la ruta relativa
+        filepath_relative = filepath_relative.replace('/', os.path.sep)
         filepath = os.path.join(DOWNLOAD_FOLDER, filepath_relative)
 
         # 1. Eliminar el archivo principal (MP4 o MP3)
         if os.path.exists(filepath):
-            os.remove(filepath)
+            # Intentar borrar con reintentos (para Windows WinError 32)
+            deleted = False
+            for i in range(5):
+                try:
+                    os.remove(filepath)
+                    deleted = True
+                    break
+                except PermissionError:
+                    print(f"Archivo bloqueado, reintentando {i+1}/5...")
+                    time.sleep(0.5)
+            
+            if not deleted:
+                return jsonify({'error': 'El archivo está siendo usado por otro proceso. Cierra el reproductor e intenta de nuevo.'}), 423
         else:
             return jsonify({'error': 'Archivo no encontrado'}), 404
         
         # 2. Eliminar la miniatura asociada
         filename_base = os.path.splitext(os.path.basename(filepath))[0]
+        
+        for img_ext in ['.jpg', '.webp', '.png']:
+            native_thumb = os.path.splitext(filepath)[0] + img_ext
+            if os.path.exists(native_thumb):
+                os.remove(native_thumb)
         
         thumb_file = None
         for f in os.listdir(THUMBNAIL_FOLDER):

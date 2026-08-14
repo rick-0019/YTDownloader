@@ -1,245 +1,459 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Descargador Desktop Web</title>
-<script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YT Local Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #111827; color: #f3f4f6; }
+        .folder-section { border-left: 4px solid #3b82f6; padding-left: 1rem; margin-bottom: 2rem; }
+        .media-card { background-color: #1f2937; border: 1px solid #374151; transition: transform 0.2s; }
+        .media-card:hover { transform: scale(1.02); border-color: #4b5563; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1f2937; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+    </style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen">
-<div class="max-w-5xl mx-auto p-6">
-    <h1 class="text-4xl font-bold mb-6 text-center">Descargador Desktop Web</h1>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold mb-2">Descargador Desktop Web</h1>
+            <p class="text-gray-400">Modo Oscuro | Organizado por carpetas</p>
+        </header>
 
-    <form id="download-form" class="space-y-4">
-        <textarea name="urls" rows="5" placeholder="Ingresa URLs (una por línea)" class="w-full p-3 rounded bg-gray-800 text-white"></textarea>
-        <input type="text" name="subcarpeta" placeholder="Nombre de subcarpeta (opcional)" class="w-full p-2 rounded bg-gray-800 text-white">
-        <div class="flex items-center gap-2">
-            <input type="checkbox" name="solo_audio" id="solo_audio" class="accent-blue-500">
-            <label for="solo_audio">Solo Audio (MP3)</label>
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Columna Principal -->
+            <div class="flex-1 min-w-0">
+
+        <!-- Formulario de Descarga -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow-xl mb-8 border border-gray-700">
+            <form id="download-form" class="space-y-4">
+                <textarea name="urls" rows="4" placeholder="Ingresa URLs de YouTube (una por línea)" 
+                    class="w-full p-4 rounded bg-gray-900 border border-gray-600 text-white focus:border-blue-500 outline-none"></textarea>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="text" name="subcarpeta" placeholder="Subcarpeta (ej. Música/Rock)" 
+                        class="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white focus:border-blue-500 outline-none">
+                    
+                    <div class="flex items-center gap-3 bg-gray-900/50 p-3 rounded border border-gray-700">
+                        <input type="checkbox" name="solo_audio" id="solo_audio" class="w-5 h-5 accent-blue-600">
+                        <label for="solo_audio" class="text-sm cursor-pointer">Solo Audio (MP3)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded text-white font-bold transition-colors">
+                    Descargar Ahora
+                </button>
+            </form>
+            <div id="status" class="mt-4 text-center text-sm"></div>
+            <div id="progress-bars" class="mt-4 space-y-4"></div>
         </div>
-        <button type="submit" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded w-full text-white font-semibold">Descargar</button>
-    </form>
 
-    <div id="status" class="mt-4 text-center text-blue-400"></div>
-    <div id="progress-bars" class="mt-4 space-y-2"></div>
+        <!-- Galería de Archivos -->
+        <main class="space-y-10">
+            {% if not media_by_folder %}
+                <div class="text-center py-20 text-gray-500 border-2 border-dashed border-gray-700 rounded-lg">
+                    <p class="text-lg italic">Todavía no has descargado nada.</p>
+                </div>
+            {% else %}
+                {% for folder, items in media_by_folder.items() %}
+                    <section class="folder-section">
+                        <h2 class="text-2xl font-bold mb-4 flex items-center gap-2 cursor-pointer hover:text-blue-400 select-none transition-colors" onclick='toggleFolder(this, {{ folder | tojson | safe }})'>
+                            <span class="text-gray-400 text-sm folder-icon transition-transform">▼</span>
+                            <span class="text-blue-500">📁</span> {{ folder }}
+                        </h2>
+                        
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 folder-content" data-folder="{{ folder | e }}">
+                            {% for item in items %}
+                                <div class="media-card rounded-lg overflow-hidden group relative cursor-pointer" onclick='playMedia({{ item.download_url | tojson | safe }})'>
+                                    <div class="aspect-video relative">
+                                        <img src="{{ item.thumb_url }}" class="w-full h-full object-cover transition-all duration-300 group-hover:brightness-110" alt="{{ item.name }}">
+                                        {% if item.is_audio %}
+                                            <div class="absolute inset-0 flex items-center justify-center">
+                                                <span class="text-3xl drop-shadow-lg">🎵</span>
+                                            </div>
+                                        {% endif %}
+                                        
+                                        <!-- Favoritos Button -->
+                                        <button data-url="{{ item.download_url }}" data-title="{{ item.name }}" data-isaudio="{{ 'true' if item.is_audio else 'false' }}" onclick="event.stopPropagation(); addToPlaylist(this.dataset.url, this.dataset.title, this.dataset.isaudio === 'true');" class="absolute top-1 left-1 w-8 h-8 bg-blue-600/90 hover:bg-blue-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-md text-lg leading-none pb-0.5" title="Agregar a Favoritos">
+                                            +
+                                        </button>
 
-    <h2 class="text-2xl font-bold mt-6 mb-2">Videos (MP4)</h2>
-    <div id="results-videos" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-2">
-        {% for item in miniaturas %}
-        {% if item.download_url and item.download_url.endswith('.mp4') %}
-            {{ render_item(item) | safe }}
-        {% endif %}
-        {% endfor %}
+                                        <!-- Delete Button -->
+                                        <button onclick='event.stopPropagation(); deleteFile(this, {{ item.download_url | tojson | safe }});' 
+                                            class="absolute top-1 right-1 w-8 h-8 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-md">
+                                            ✖
+                                        </button>
+                                    </div>
+                                    <div class="p-2">
+                                        <p class="text-xs font-medium truncate text-gray-300" title="{{ item.name }}">{{ item.name }}</p>
+                                        <div class="flex justify-between items-center mt-1">
+                                            <span class="text-[9px] uppercase font-bold text-gray-500">{{ 'Audio' if item.is_audio else 'Video' }}</span>
+                                            <a href="{{ item.download_url }}" download class="text-blue-400 hover:text-blue-200 text-xs font-bold">⬇</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+                {% endfor %}
+            {% endif %}
+        </main>
+            </div> <!-- Fin Columna Principal -->
+            <!-- Columna Playlist (Favoritos) -->
+            <aside class="w-full lg:w-80 flex-shrink-0">
+                <div class="bg-gray-800/80 rounded-lg shadow-xl p-4 sticky top-4 border border-gray-700 h-[calc(100vh-2rem)] flex flex-col">
+                    
+                    <!-- Reproductor Integrado -->
+                    <div id="inlinePlayer" class="hidden flex-col mb-4 bg-black rounded-lg overflow-hidden border border-gray-700 relative shadow-lg">
+                        <button onclick="closePlayer()" class="absolute top-1 right-1 z-10 w-6 h-6 bg-gray-900/80 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-xs transition-colors">✕</button>
+                        <video id="inlineVideo" controls class="w-full aspect-video bg-black" style="display: none;"></video>
+                        <div id="inlineAudioContainer" class="w-full aspect-video flex flex-col items-center justify-center bg-gray-900" style="display: none;">
+                            <span class="text-4xl mb-2">🎵</span>
+                            <p class="text-gray-400 text-xs">Reproduciendo Audio</p>
+                        </div>
+                        <audio id="inlineAudio" controls class="w-full h-10 bg-gray-800" style="display: none;"></audio>
+                    </div>
+
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-white">
+                        <span>⭐</span> Favoritos / Playlist
+                    </h3>
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="playFromPlaylist(0)" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 rounded transition-colors flex items-center justify-center gap-1">
+                            <span>▶</span> Reproducir Todo
+                        </button>
+                    </div>
+                    <div id="playlist-container" class="space-y-2 overflow-y-auto flex-1 custom-scrollbar pr-2">
+                        <!-- Elementos de la playlist -->
+                    </div>
+                </div>
+            </aside>
+        </div>
     </div>
 
-    <h2 class="text-2xl font-bold mt-6 mb-2">Audios (MP3)</h2>
-    <div id="results-audios" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-2">
-        {% for item in miniaturas %}
-        {% if item.download_url and item.download_url.endswith('.mp3') %}
-            {{ render_item(item) | safe }}
-        {% endif %}
-        {% endfor %}
-    </div>
-</div>
+    <!-- Modal de Reproducción (Eliminado, ahora integrado en sidebar) -->
 
-<script>
-document.addEventListener('DOMContentLoaded', (event) => {
-    // Escuchar el evento de formulario solo después de que el DOM esté cargado
-    document.getElementById('download-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        
-        document.getElementById('status').innerText = 'Iniciando descarga...';
-        document.getElementById('progress-bars').innerHTML = '';
+    <script>
+        // Lógica de Playlist
+        let playlist = JSON.parse(localStorage.getItem('yt_playlist')) || [];
+        let currentPlaylistIndex = -1;
+        let isPlayingFromPlaylist = false;
 
-        try {
-            const response = await fetch('/download', { method: 'POST', body: formData });
-            const data = await response.json();
+        function saveAndRenderPlaylist() {
+            localStorage.setItem('yt_playlist', JSON.stringify(playlist));
+            renderPlaylist();
+        }
 
-            if (data.error) {
-                document.getElementById('status').innerText = data.error;
+        function addToPlaylist(url, title, isAudio) {
+            if (!playlist.find(item => item.url === url)) {
+                playlist.push({ url, title, isAudio });
+                saveAndRenderPlaylist();
+                
+                const statusEl = document.getElementById('status');
+                statusEl.innerText = '⭐ Agregado a favoritos';
+                statusEl.className = 'mt-4 text-center text-sm font-medium text-green-400';
+                setTimeout(() => statusEl.innerText = '', 3000);
+            }
+        }
+
+        function removeFromPlaylist(index) {
+            playlist.splice(index, 1);
+            if (index < currentPlaylistIndex) currentPlaylistIndex--;
+            else if (index === currentPlaylistIndex) currentPlaylistIndex = -1;
+            saveAndRenderPlaylist();
+        }
+
+        function renderPlaylist() {
+            const container = document.getElementById('playlist-container');
+            if (playlist.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500 italic text-center mt-4">Tu playlist está vacía.<br>Usa el botón [+] en los archivos para agregar.</p>';
                 return;
             }
-
-            // Iniciar polleo de progreso
-            startPolling();
-
-        } catch(err){
-            document.getElementById('status').innerText = 'Error en la solicitud';
-            console.error(err);
+            
+            container.innerHTML = playlist.map((item, index) => `
+                <div draggable="true" ondragstart="handleDragStart(event, ${index})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, ${index})" ondragend="handleDragEnd(event)" class="bg-gray-900 border border-gray-700 p-2.5 rounded flex items-center justify-between group cursor-pointer hover:border-gray-500 transition-colors ${index === currentPlaylistIndex ? 'border-l-4 border-l-blue-500 bg-gray-800' : ''}" onclick="playFromPlaylist(${index})">
+                    <div class="flex items-center gap-2 overflow-hidden pointer-events-none">
+                        <span class="text-gray-500 text-xs">☰</span>
+                        <span class="text-sm opacity-80">${item.isAudio ? '🎵' : '🎬'}</span>
+                        <p class="text-xs text-gray-300 truncate font-medium" title="${item.title}">${item.title}</p>
+                    </div>
+                    <button onclick="event.stopPropagation(); removeFromPlaylist(${index})" class="text-gray-500 hover:text-red-500 text-lg px-1 opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                </div>
+            `).join('');
         }
-    });
-});
 
-let pollingInterval;
-let downloadedUrls = new Set();
+        let draggedItemIndex = null;
 
-function startPolling() {
-    if (pollingInterval) clearInterval(pollingInterval);
-    pollingInterval = setInterval(async () => {
-        try {
-            const res = await fetch('/progress');
-            const progressData = await res.json();
+        function handleDragStart(event, index) {
+            draggedItemIndex = index;
+            event.dataTransfer.effectAllowed = 'move';
+            event.target.classList.add('opacity-50');
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+        }
+
+        function handleDrop(event, index) {
+            event.preventDefault();
+            if (draggedItemIndex === null || draggedItemIndex === index) return;
             
-            const progressBarsContainer = document.getElementById('progress-bars');
+            const draggedItem = playlist[draggedItemIndex];
             
-            // Actualizar o crear barras de progreso
-            for (const [url, data] of Object.entries(progressData)) {
-                const progress = data.progress;
-                const downloadUrl = data.download_url;
-                const status = data.status;
-                
-                // Limpiar caracteres no válidos para el ID
-                const safeId = btoa(url).replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
-                let barContainer = document.getElementById(`progress-${safeId}`);
-                if (!barContainer) {
-                    barContainer = document.createElement('div');
-                    barContainer.id = `progress-${safeId}`;
-                    barContainer.className = "w-full bg-gray-700 rounded h-6 mb-2 overflow-hidden relative border border-gray-600";
-                    barContainer.innerHTML = `<div class="bg-blue-500 h-full transition-all duration-300" style="width: 0%"></div>
-                                              <span class="absolute inset-0 flex items-center justify-center text-xs font-bold text-white uppercase tracking-wider">0%</span>`;
-                    progressBarsContainer.appendChild(barContainer);
+            if (currentPlaylistIndex === draggedItemIndex) {
+                currentPlaylistIndex = index;
+            } else if (currentPlaylistIndex !== -1) {
+                if (draggedItemIndex < currentPlaylistIndex && index >= currentPlaylistIndex) {
+                    currentPlaylistIndex--;
+                } else if (draggedItemIndex > currentPlaylistIndex && index <= currentPlaylistIndex) {
+                    currentPlaylistIndex++;
                 }
-                
-                const fill = barContainer.querySelector('div');
-                const text = barContainer.querySelector('span');
-                
-                if (data.error) {
-                    fill.className = "bg-red-700 h-full";
-                    fill.style.width = "100%";
-                    text.innerText = `ERROR: ${data.error}`;
-                    continue;
-                }
+            }
 
-                fill.style.width = `${progress}%`;
+            playlist.splice(draggedItemIndex, 1);
+            playlist.splice(index, 0, draggedItem);
+            
+            saveAndRenderPlaylist();
+        }
+
+        function handleDragEnd(event) {
+            event.target.classList.remove('opacity-50');
+            draggedItemIndex = null;
+        }
+
+        function playFromPlaylist(index) {
+            if (index < 0 || index >= playlist.length) return;
+            currentPlaylistIndex = index;
+            saveAndRenderPlaylist(); 
+            const item = playlist[index];
+            playMedia(item.url, true);
+        }
+
+        function playNextInPlaylist() {
+            if (isPlayingFromPlaylist && currentPlaylistIndex >= 0 && currentPlaylistIndex < playlist.length - 1) {
+                playFromPlaylist(currentPlaylistIndex + 1);
+            } else if (isPlayingFromPlaylist) {
+                currentPlaylistIndex = -1;
+                saveAndRenderPlaylist();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderPlaylist();
+            loadFolderStates();
+            
+            document.getElementById('inlineVideo').addEventListener('ended', playNextInPlaylist);
+            document.getElementById('inlineAudio').addEventListener('ended', playNextInPlaylist);
+
+            document.getElementById('download-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const statusEl = document.getElementById('status');
                 
-                if (progress === 100 && status === 'processing') {
-                    fill.className = "bg-yellow-600 h-full animate-pulse";
-                    text.innerText = "PROCESANDO / UNIFICANDO ARCHIVOS...";
-                } else if (progress === 100 && status === 'finished') {
-                    fill.className = "bg-green-600 h-full";
-                    text.innerText = "¡COMPLETO!";
-                    
-                    if (downloadUrl && !downloadedUrls.has(url)) {
-                        downloadedUrls.add(url);
-                        
-                        document.getElementById('status').innerHTML = `
-                            <div class="bg-green-600 text-white p-3 rounded mt-4 shadow-lg border-2 border-green-400">
-                                <p class="font-bold">¡Archivo listo!</p>
-                                <p class="text-sm">Si la descarga no inició sola: 
-                                <a href="${window.location.origin}${downloadUrl}" download="${data.title}" class="font-extrabold underline ml-1 hover:text-green-100">Haz clic aquí</a></p>
-                            </div>`;
-                        
-                        triggerAutoDownload(downloadUrl, data.title || 'video');
+                statusEl.innerText = 'Iniciando descarga...';
+                statusEl.className = 'mt-4 text-center text-sm font-medium text-blue-400';
+                
+                try {
+                    const response = await fetch('/download', { method: 'POST', body: formData });
+                    const data = await response.json();
+                    if (data.error) {
+                        statusEl.innerText = data.error;
+                        statusEl.className = 'mt-4 text-center text-sm font-medium text-red-400';
+                        return;
                     }
-                } else {
-                    text.innerText = `DESCARGANDO: ${progress}%`;
+                    startPolling();
+                } catch(err) {
+                    statusEl.innerText = 'Error de conexión';
+                    statusEl.className = 'mt-4 text-center text-sm font-medium text-red-400';
                 }
-            }
-
-            if (Object.values(progressData).length > 0 && Object.values(progressData).every(d => d.status === 'finished' || d.status === 'error')) {
-                // Tareas finalizadas
-            }
-
-        } catch (e) {
-            console.error("Error en polleo:", e);
-        }
-    }, 1000);
-}
-
-function triggerAutoDownload(url, title) {
-    // Usar URL absoluta para evitar problemas de contexto
-    const absoluteUrl = window.location.origin + url;
-    const a = document.createElement('a');
-    a.href = absoluteUrl;
-    a.download = title;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    // Recargar la galería después de un momento para mostrar la miniatura
-    setTimeout(() => {
-        location.reload();
-    }, 2000);
-}
-
-function playMedia(filePath) {
-    const modal = document.getElementById('mediaModal');
-    const video = document.getElementById('modalVideo');
-    const audio = document.getElementById('modalAudio');
-
-    video.pause();
-    audio.pause();
-    video.style.display = 'none';
-    audio.style.display = 'none';
-
-    const isVideo = filePath.endsWith('.mp4');
-    const isAudio = filePath.endsWith('.mp3');
-
-    if (isVideo) {
-        video.src = filePath;
-        video.style.display = 'block';
-        video.play().catch(e => console.error("Error al intentar reproducir el video:", e));
-    } else if (isAudio) {
-        audio.src = filePath;
-        audio.style.display = 'block';
-        audio.play().catch(e => console.error("Error al intentar reproducir el audio:", e));
-    }
-    
-    modal.classList.remove('hidden');
-}
-
-function closeModal() {
-    const modal = document.getElementById("mediaModal");
-    const video = document.getElementById("modalVideo");
-    const audio = document.getElementById("modalAudio");
-    video.pause();
-    audio.pause();
-    video.src = "";
-    audio.src = "";
-    modal.classList.add("hidden");
-}
-
-async function deleteFile(button, downloadUrl) {
-    if (!confirm('¿Estás seguro de que quieres eliminar este archivo?')) {
-        return;
-    }
-
-    const itemDiv = button.closest('div');
-    
-    try {
-        const response = await fetch('/delete', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ download_url: downloadUrl })
+            });
         });
 
-        if (response.ok) {
-            itemDiv.remove();
-        } else {
-            const errorData = await response.json();
-            alert('Error al eliminar el archivo: ' + errorData.error);
+        let pollingInterval;
+        let downloadedUrls = new Set();
+
+        function startPolling() {
+            if (pollingInterval) clearInterval(pollingInterval);
+            pollingInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/progress');
+                    const progressData = await res.json();
+                    const container = document.getElementById('progress-bars');
+                    
+                    for (const [url, data] of Object.entries(progressData)) {
+                        const safeId = btoa(url).replace(/[^a-zA-Z0-9]/g, '').substring(0, 15);
+                        let bar = document.getElementById(`progress-${safeId}`);
+                        
+                        if (!bar) {
+                            bar = document.createElement('div');
+                            bar.id = `progress-${safeId}`;
+                            bar.innerHTML = `
+                                <div class="flex justify-between text-[10px] text-gray-400 font-bold uppercase truncate mb-1">
+                                    <span class="truncate pr-4">${data.title || 'Preparando...'}</span>
+                                    <span class="val">0%</span>
+                                </div>
+                                <div class="w-full bg-gray-900 rounded-full h-2 overflow-hidden border border-gray-700">
+                                    <div class="fill bg-blue-600 h-full transition-all duration-300" style="width: 0%"></div>
+                                </div>`;
+                            container.appendChild(bar);
+                        }
+                        
+                        const fill = bar.querySelector('.fill');
+                        const text = bar.querySelector('.val');
+                        
+                        if (data.error) {
+                            fill.className = "fill bg-red-700 h-full";
+                            fill.style.width = "100%";
+                            text.innerText = "ERROR";
+                            continue;
+                        }
+
+                        fill.style.width = `${data.progress}%`;
+                        text.innerText = `${data.progress}%`;
+                        
+                        if (data.progress === 100 && data.status === 'processing') {
+                            fill.className = "fill bg-orange-500 h-full animate-pulse";
+                            text.innerText = data.solo_audio ? "⚠ EXTRAYENDO AUDIO..." : "UNIFICANDO...";
+                            text.classList.add('text-orange-400', 'font-black');
+                        } else if (data.progress === 100 && data.status === 'finished') {
+                            fill.className = "fill bg-green-600 h-full";
+                            text.innerText = "✅ LISTO";
+                            text.classList.remove('text-orange-400', 'font-black');
+                            text.classList.add('text-green-400');
+                            
+                            if (!downloadedUrls.has(url)) {
+                                downloadedUrls.add(url);
+                                // Recarga rápida para mostrar el archivo
+                                setTimeout(() => location.reload(), 1000);
+                            }
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            }, 1000);
         }
 
-    } catch (error) {
-        alert('Error de conexión con el servidor.');
-        console.error('Error:', error);
-    }
-}
-</script>
 
-<div id="mediaModal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
-    <div class="bg-gray-900 p-4 rounded-lg relative w-3/4 h-3/4 flex flex-col items-center">
-        <button onclick="closeModal()" class="absolute top-2 right-2 text-white text-xl">✖</button>
-        <video id="modalVideo" controls class="w-full h-full rounded-lg shadow-lg" style="display: none;"></video>
-        <audio id="modalAudio" controls class="w-full rounded-lg shadow-lg mt-4" style="display: none;"></audio>
-    </div>
-</div>
+        function playMedia(url, fromPlaylist = false) {
+            isPlayingFromPlaylist = fromPlaylist;
+            if (!fromPlaylist) {
+                currentPlaylistIndex = -1;
+                renderPlaylist();
+            }
 
+            const playerBox = document.getElementById('inlinePlayer');
+            const video = document.getElementById('inlineVideo');
+            const audio = document.getElementById('inlineAudio');
+            const audioCont = document.getElementById('inlineAudioContainer');
+
+            video.pause(); audio.pause();
+            video.style.display = audio.style.display = audioCont.style.display = 'none';
+
+            if (url.endsWith('.mp4') || url.endsWith('.mkv') || url.endsWith('.webm')) {
+                video.src = url;
+                video.style.display = 'block';
+                video.play();
+            } else {
+                audio.src = url;
+                audioCont.style.display = 'flex';
+                audio.style.display = 'block';
+                audio.play();
+            }
+            playerBox.classList.remove('hidden');
+            playerBox.classList.add('flex');
+        }
+
+        function closePlayer() {
+            const playerBox = document.getElementById('inlinePlayer');
+            document.getElementById('inlineVideo').pause();
+            document.getElementById('inlineAudio').pause();
+            playerBox.classList.add('hidden');
+            playerBox.classList.remove('flex');
+        }
+
+        async function deleteFile(btn, url) {
+            if (!confirm('¿Eliminar archivo permanentemente?')) return;
+            
+            // Si el archivo se está reproduciendo, detenerlo para liberar el bloqueo
+            const video = document.getElementById('inlineVideo');
+            const audio = document.getElementById('inlineAudio');
+            
+            // Comparamos la URL (normalizando para evitar problemas de dominio)
+            const currentVideoUrl = video.src ? new URL(video.src).pathname : '';
+            const currentAudioUrl = audio.src ? new URL(audio.src).pathname : '';
+            const targetUrl = new URL(url, window.location.origin).pathname;
+
+            if (currentVideoUrl === targetUrl || currentAudioUrl === targetUrl) {
+                console.log("Deteniendo reproductor para permitir borrado...");
+                closePlayer();
+                video.src = "";
+                audio.src = "";
+                video.load();
+                audio.load();
+            }
+
+            try {
+                const res = await fetch('/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ download_url: url })
+                });
+                if (res.ok) {
+                    btn.closest('.media-card').remove();
+                } else {
+                    const errorData = await res.json();
+                    alert('Error al borrar: ' + (errorData.error || 'Desconocido'));
+                }
+            } catch (e) { alert('Error de conexión al intentar borrar'); }
+        }
+
+        // Lógica de Carpetas Colapsables
+        function toggleFolder(headerElement, folderName) {
+            const content = headerElement.nextElementSibling;
+            const icon = headerElement.querySelector('.folder-icon');
+            
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(0deg)';
+                saveFolderState(folderName, true);
+            } else {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(-90deg)';
+                saveFolderState(folderName, false);
+            }
+        }
+
+        function saveFolderState(folder, isOpen) {
+            let states = JSON.parse(localStorage.getItem('yt_folder_states')) || {};
+            states[folder] = isOpen;
+            localStorage.setItem('yt_folder_states', JSON.stringify(states));
+        }
+
+        function loadFolderStates() {
+            let states = JSON.parse(localStorage.getItem('yt_folder_states')) || {};
+            document.querySelectorAll('.folder-section').forEach(section => {
+                const header = section.querySelector('h2');
+                const content = section.querySelector('.folder-content');
+                if (!content) return;
+                
+                const folderName = content.dataset.folder;
+                const icon = header.querySelector('.folder-icon');
+
+                // Si estaba guardada como cerrada (false), la colapsamos
+                if (states[folderName] === false) {
+                    content.classList.add('hidden');
+                    icon.style.transform = 'rotate(-90deg)';
+                } else {
+                    icon.style.transform = 'rotate(0deg)';
+                }
+            });
+        }
+    </script>
 </body>
 </html>
+
 
 
 
